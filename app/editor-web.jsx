@@ -1,4 +1,3 @@
-import * as FileSystem from "expo-file-system/legacy";
 import { router, useLocalSearchParams } from "expo-router";
 import React, {
   useCallback,
@@ -23,14 +22,12 @@ import {
   TextInput,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
-import WebView from "react-native-webview";
 import MovieModal from "./components/movie-modal";
 import SubBlock from "./components/sub-block";
 
 const Editor = () => {
   const webViewRef = useRef(null);
   const params = useLocalSearchParams();
-  const [fileUri, setFileUri] = useState(null);
   const [subArr, setSubArr] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [movieModalVisible, setMovieModalVisible] = useState(false);
@@ -110,29 +107,35 @@ const Editor = () => {
     console.log("video url updated:", videoUrls);
   }, [videoUrls]);
 
-  const onShouldInterruptRequest = (event) => {
-    const { url } = event;
-
-    if (url.includes(".srt") || url.includes(".vtt") || url.includes(".txt")) {
-      console.log("[Subtitle request intercepted]:", url);
-      return false;
-    }
-
-    return false;
-  };
-
   const saveAsVtt = () => {
     const vttText = ArrToSub(subArr);
-    const saveUri = FileSystem.documentDirectory + params.fileName;
+    const fileName = params.fileName || "subtitle.vtt";
+    const blob = new Blob([vttText], { type: "text/vtt" });
 
-    FileSystem.writeAsStringAsync(saveUri, vttText);
+    // Check for msSaveBlob (works in some older/mini browsers)
+    if (window.navigator && window.navigator.msSaveBlob) {
+      window.navigator.msSaveBlob(blob, fileName);
+      Alert.alert("Subtitle saved");
+      return;
+    }
 
-    Alert.alert("Subtitle saved", `Saved to: ${saveUri}`);
+    // Regular download
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    link.click();
+
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+    }, 100);
+
+    Alert.alert("Subtitle saved");
   };
 
   const testSubInVid = () => {
     if (videoUrls.length === 0) {
-      Alert.alert("video not avaliable. load it first");
+      Alert.alert("video not available. load it first");
       return;
     }
 
@@ -244,14 +247,7 @@ const Editor = () => {
 
   const renderItems = useCallback(
     ({ item, index }) => {
-      return (
-        <SubBlock
-          subData={item}
-          videoName={params.fileName.replace(".vtt", "")}
-          setSub={changeSub}
-          Index={index}
-        />
-      );
+      return <SubBlock subData={item} setSub={changeSub} Index={index} />;
     },
     [changeSub],
   );
@@ -297,50 +293,24 @@ const Editor = () => {
 
   useEffect(() => {
     if (params.file) {
-      setFileUri(params.file);
+      loadSubtitleFile(params.file);
     }
   }, [params.file]);
 
-  useEffect(() => {
-    if (!fileUri) return;
-
-    let isMounted = true;
-
-    const fetchText = async () => {
-      try {
-        let text;
-
-        if (Platform.OS === "web") {
-          const res = await fetch(fileUri);
-          text = await res.text();
-        } else {
-          const file = await FileSystem.getInfoAsync(fileUri);
-          if (!file.exists) {
-            throw new Error("File does not exist at path: " + fileUri);
-          }
-          text = await FileSystem.readAsStringAsync(fileUri);
-        }
-
-        if (isMounted && text) {
-          const parsedSubs = TextToSub(text.replace(/\r\n|\r/g, "\n"));
-          setSubArr(parsedSubs || []);
-          setIsLoading(false);
-        }
-      } catch (error) {
-        console.error("Error loading subtitle file:", error);
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    };
-
+  const loadSubtitleFile = async (fileUrl) => {
     setIsLoading(true);
-    fetchText();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [fileUri, TextToSub]);
+    try {
+      const response = await fetch(fileUrl);
+      const text = await response.text();
+      const parsedSubs = TextToSub(text.replace(/\r\n|\r/g, "\n"));
+      setSubArr(parsedSubs || []);
+    } catch (error) {
+      console.error("Error loading subtitle file:", error);
+      Alert.alert("Error", "Failed to load subtitle file");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // FlatList optimization props
   const flatListProps = useMemo(
@@ -350,11 +320,11 @@ const Editor = () => {
       keyExtractor: keyExtractor,
       ref: flatListRef,
       // Performance optimizations
-      initialNumToRender: 10,
-      maxToRenderPerBatch: 5,
-      windowSize: 7,
-      updateCellsBatchingPeriod: 50,
+      initialNumToRender: 50,
+      maxToRenderPerBatch: 50,
       removeClippedSubviews: Platform.OS !== "web",
+      // Layout optimization
+      getItemLayout: getItemLayout,
       // Scroll performance
       decelerationRate: Platform.OS === "ios" ? 0.998 : 0.99,
       scrollEventThrottle: 16,
@@ -365,11 +335,6 @@ const Editor = () => {
               minIndexForVisible: 0,
             }
           : undefined,
-      // Disable virtualization for web
-      disableVirtualization: Platform.OS === "web",
-      // Optimize for large lists
-      onEndReachedThreshold: 0.5,
-      // Remove heavy features
       showsVerticalScrollIndicator: true,
       showsHorizontalScrollIndicator: false,
     }),
@@ -414,7 +379,7 @@ const Editor = () => {
             router.back();
           }}
         />
-        <Appbar.Content title="Editor" />
+        <Appbar.Content title={params.fileName} />
         <Appbar.Action icon="content-save" onPress={() => saveAsVtt()} />
       </Appbar.Header>
       {videoUrls.length > 0 && (
@@ -423,29 +388,16 @@ const Editor = () => {
             minHeight: isWebviewVisible ? 300 : 0,
           }}
         >
-          <WebView
+          <iframe
+            title="Video Player"
+            src={videoUrls[0]}
             style={{
-              flex: 1,
-              margin: 5,
+              width: "100%",
+              height: videoUrls.length > 0 ? 300 : 0,
+              border: "none",
             }}
-            source={{ uri: videoUrls[0] }}
-            onLoad={() => console.log("WebView loaded")}
-            ref={webViewRef}
-            onShouldInterruptRequest={onShouldInterruptRequest}
-            onShouldStartLoadWithRequest={(request) => {
-              // Allow only the initial video URL or same domain
-              const allowedDomain = "vidlink.pro";
-              const url = request.url;
-
-              if (url.startsWith(videoUrls[0]) || url.includes(allowedDomain)) {
-                return true; // allow
-              }
-
-              console.log("Blocked popup/redirect:", url);
-              return false; // block
-            }}
-            setSupportMultipleWindows={false}
-          ></WebView>
+            allowFullScreen
+          />
         </View>
       )}
 
@@ -523,9 +475,21 @@ const Editor = () => {
             }}
             style={{
               marginHorizontal: 10,
+              marginBottom: 10,
             }}
           >
             commit sync
+          </Button>
+          <Button
+            mode="outlined"
+            onPress={() => {
+              (setTimeSyncModalVisible(false), setSyncSecond(0));
+            }}
+            style={{
+              marginHorizontal: 10,
+            }}
+          >
+            Cancel
           </Button>
         </SafeAreaView>
       </Modal>

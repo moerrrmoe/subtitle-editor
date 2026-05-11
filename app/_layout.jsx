@@ -23,6 +23,12 @@ export default function Layout() {
             headerShown: false,
           }}
         />
+        <Stack.Screen
+          name="editor-web"
+          options={{
+            headerShown: false,
+          }}
+        />
       </Stack>
     </PaperProvider>
   );

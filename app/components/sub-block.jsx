@@ -1,16 +1,40 @@
 import React, { memo, useCallback, useEffect, useRef, useState } from "react";
-import { Platform, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Button,
+  Image,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 
 const SubBlock = memo(
-  ({ Index, subData, setTime, setSub }) => {
+  ({ Index, subData, setTime, setSub, videoName }) => {
     const [localSubtitle, setLocalSubtitle] = useState(subData.subtitle);
     const subDebounceTimer = useRef(null);
     const isMounted = useRef(true);
+    const [imgUri, setImgUri] = useState("");
+    const [isImgVisible, setIsImgVisible] = useState(false);
 
     // Format time for display
     const formatTimeDisplay = useCallback((time) => {
       return `${String(time.hour).padStart(2, "0")}:${String(time.min).padStart(2, "0")}:${String(time.sec).padStart(2, "0")},${String(time.ms).padStart(3, "0")}`;
     }, []);
+
+    const getImg = () => {
+      setIsImgVisible((prev) => !prev);
+      if (imgUri) {
+        return;
+      }
+      const startTime = `${String(subData.start.hour).padStart(1, "0")}_${String(subData.start.min).padStart(2, "0")}_${String(subData.start.sec).padStart(2, "0")}_${String(subData.start.ms).padStart(3, "0")}`;
+      const endTime = `${String(subData.end.hour).padStart(1, "0")}_${String(subData.end.min).padStart(2, "0")}_${String(subData.end.sec).padStart(2, "0")}_${String(subData.end.ms).padStart(3, "0")}`;
+      const partialName = `${startTime}__${endTime}`;
+      setImgUri(
+        `https://vip.yotepyaclub.com/sub-editor/proxy-image.php?partialName=${partialName}&videoName=${encodeURIComponent(videoName)}`,
+      );
+      return null;
+    };
 
     // Sync with props
     useEffect(() => {
@@ -48,6 +72,7 @@ const SubBlock = memo(
               {formatTimeDisplay(subData.start)}
             </Text>
           </View>
+
           <View style={styles.timeBox}>
             <Text style={styles.timeLabel}>End</Text>
             <Text style={styles.timeText}>
@@ -56,6 +81,30 @@ const SubBlock = memo(
           </View>
         </View>
 
+        <View>
+          <Button
+            style={{
+              borderRadius: 6,
+              borderWidth: 1,
+              borderColor: "#e0e0e0",
+            }}
+            title="img"
+            color="#644DA1"
+            onPress={() => getImg()}
+          />
+        </View>
+        <View
+          style={{
+            flex: 1,
+          }}
+        >
+          {isImgVisible && imgUri && (
+            <Image
+              source={{ uri: imgUri }}
+              style={{ width: "100%", height: 100, marginTop: 8 }}
+            />
+          )}
+        </View>
         {/* Subtitle Text Input */}
         <View style={styles.subtitleContainer}>
           <TextInput

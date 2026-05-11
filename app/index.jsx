@@ -4,7 +4,14 @@ import * as FileSystem from "expo-file-system/legacy";
 import { router } from "expo-router";
 import * as Sharing from "expo-sharing";
 import React, { useEffect, useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  Alert,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { Appbar, Button, Divider } from "react-native-paper";
 
 const Home = () => {
@@ -42,11 +49,26 @@ const Home = () => {
       if (!result.canceled && result.assets?.[0]) {
         const asset = result.assets[0];
 
+        const fileContent =
+          Platform.OS !== "web"
+            ? await FileSystem.readAsStringAsync(asset.uri)
+            : await fetch(asset.uri).then((response) => response.text());
+        const vttFileName = asset.name.replace(/\.[^/.]+$/, "") + ".vtt";
+
+        if (Platform.OS === "web") {
+          const blob = new Blob([fileContent], { type: "text/vtt" });
+          const url = URL.createObjectURL(blob);
+          router.push({
+            pathname: "/editor-web",
+            params: { file: url, fileName: vttFileName },
+          });
+          return;
+        }
+
         // Read the file content
-        const fileContent = await FileSystem.readAsStringAsync(asset.uri);
 
         // Create filename with .vtt extension
-        const vttFileName = asset.name.replace(/\.[^/.]+$/, "") + ".vtt";
+
         const permanentUri = `${FileSystem.documentDirectory}${vttFileName}`;
 
         // Write directly with .vtt extension
@@ -61,7 +83,11 @@ const Home = () => {
         if (!history.find((item) => item.uri === newItem.uri)) {
           const newHistory = [newItem, ...history];
           setHistory(newHistory);
-          await AsyncStorage.setItem("history", JSON.stringify(newHistory));
+          if (Platform.OS === "web") {
+            localStorage.setItem("history", JSON.stringify(newHistory));
+          } else {
+            await AsyncStorage.setItem("history", JSON.stringify(newHistory));
+          }
         } else {
           const existingIndex = history.findIndex(
             (item) => item.uri === newItem.uri,
@@ -71,15 +97,19 @@ const Home = () => {
             updatedHistory.splice(existingIndex, 1);
             updatedHistory.unshift(newItem);
             setHistory(updatedHistory);
-            await AsyncStorage.setItem(
-              "history",
-              JSON.stringify(updatedHistory),
-            );
+            if (Platform.OS === "web") {
+              localStorage.setItem("history", JSON.stringify(updatedHistory));
+            } else {
+              await AsyncStorage.setItem(
+                "history",
+                JSON.stringify(updatedHistory),
+              );
+            }
           }
         }
 
         router.push({
-          pathname: "/editor",
+          pathname: Platform.OS == "web" ? "/editor-web" : "/editor",
           params: { file: permanentUri, fileName: vttFileName },
         });
       }
@@ -101,7 +131,11 @@ const Home = () => {
 
       const updatedHistory = history.filter((_, i) => i !== index);
       setHistory(updatedHistory);
-      await AsyncStorage.setItem("history", JSON.stringify(updatedHistory));
+      if (Platform.OS === "web") {
+        localStorage.setItem("history", JSON.stringify(updatedHistory));
+      } else {
+        await AsyncStorage.setItem("history", JSON.stringify(updatedHistory));
+      }
     } catch (e) {
       console.error("Remove error", e);
     }
@@ -132,7 +166,8 @@ const Home = () => {
                   style={styles.fileLink}
                   onPress={() =>
                     router.push({
-                      pathname: "/editor",
+                      pathname:
+                        Platform.OS == "web" ? "/editor-web" : "/editor",
                       params: { file: item.uri, fileName: item.name },
                     })
                   }

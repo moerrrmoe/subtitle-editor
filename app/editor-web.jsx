@@ -247,7 +247,14 @@ const Editor = () => {
 
   const renderItems = useCallback(
     ({ item, index }) => {
-      return <SubBlock subData={item} setSub={changeSub} Index={index} />;
+      return (
+        <SubBlock
+          videoName={params.fileName.replace(".vtt", "")}
+          subData={item}
+          setSub={changeSub}
+          Index={index}
+        />
+      );
     },
     [changeSub],
   );

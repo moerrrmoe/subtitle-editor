@@ -1,5 +1,6 @@
 import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Button,
   Image,
   Platform,
@@ -10,12 +11,18 @@ import {
 } from "react-native";
 
 const SubBlock = memo(
-  ({ Index, subData, setTime, setSub, videoName }) => {
+  ({ Index, subData, setTime, setSub, videoName, addScrollIndex }) => {
+    const itemKey = useMemo(() => `${videoName}_${Index}`, [videoName, Index]);
     const [localSubtitle, setLocalSubtitle] = useState(subData.subtitle);
     const subDebounceTimer = useRef(null);
     const isMounted = useRef(true);
-    const [imgUri, setImgUri] = useState("");
-    const [isImgVisible, setIsImgVisible] = useState(false);
+    const [imgUri, setImgUri] = useState(() => {
+      return imageCache.current[itemKey]?.uri || "";
+    });
+    const [isImgLoading, setIsImgLoading] = useState(false);
+    const [imgError, setImgError] = useState(() => {
+      return imageCache.current[itemKey]?.error || false;
+    });
 
     // Format time for display
     const formatTimeDisplay = useCallback((time) => {
@@ -23,8 +30,10 @@ const SubBlock = memo(
     }, []);
 
     const getImg = () => {
-      setIsImgVisible((prev) => !prev);
+      setIsImgLoading(true);
+      setImgError(false);
       if (imgUri) {
+        setIsImgLoading(false);
         return;
       }
       const startTime = `${String(subData.start.hour).padStart(1, "0")}_${String(subData.start.min).padStart(2, "0")}_${String(subData.start.sec).padStart(2, "0")}_${String(subData.start.ms).padStart(3, "0")}`;
@@ -33,6 +42,7 @@ const SubBlock = memo(
       setImgUri(
         `https://vip.yotepyaclub.com/sub-editor/proxy-image.php?partialName=${partialName}&videoName=${encodeURIComponent(videoName)}`,
       );
+      addScrollIndex();
       return null;
     };
 
@@ -47,6 +57,12 @@ const SubBlock = memo(
         if (subDebounceTimer.current) clearTimeout(subDebounceTimer.current);
       };
     }, []);
+
+    useEffect(() => {
+      if (imgUri) {
+        imageCache.current[itemKey] = { uri: imgUri, error: imgError };
+      }
+    }, [imgUri, imgError, itemKey]);
 
     const handleSubtitleChange = useCallback(
       (text) => {
@@ -96,13 +112,40 @@ const SubBlock = memo(
         <View
           style={{
             flex: 1,
+            overflowX: "scroll",
+            justifyContent: "center",
+            alignItems: "center",
           }}
         >
-          {isImgVisible && imgUri && (
+          {isImgLoading && (
+            <ActivityIndicator
+              style={{
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+              }}
+            />
+          )}
+          {imgUri && !imgError && (
             <Image
               source={{ uri: imgUri }}
-              style={{ width: "100%", height: 100, marginTop: 8 }}
+              style={{
+                width: 400,
+                height: 80,
+                marginTop: 8,
+              }}
+              onLoad={() => setIsImgLoading(false)}
+              onError={() => {
+                setIsImgLoading(false);
+                setImgError(true);
+              }}
             />
+          )}
+          {imgError && (
+            <Text style={{ color: "red", marginTop: 8 }}>
+              Failed to load image. If the issue persists, please contact
+              developer(minn htet).
+            </Text>
           )}
         </View>
         {/* Subtitle Text Input */}
@@ -189,5 +232,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#e0e0e0",
   },
 });
+
+const imageCache = { current: {} };
 
 export default SubBlock;

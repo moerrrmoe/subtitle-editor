@@ -17,7 +17,9 @@ import {
 import {
   ActivityIndicator,
   Appbar,
+  Badge,
   Button,
+  FAB,
   MD2Colors,
   TextInput,
 } from "react-native-paper";
@@ -38,9 +40,11 @@ const Editor = () => {
   const [timeSyncModalVisible, setTimeSyncModalVisible] = useState(false);
   const [syncSecond, setSyncSecond] = useState(0);
   const [isWebviewVisible, setIsWebviewVisible] = useState(true);
+  const [scrollIndex, setScrollIndex] = useState([]);
 
   const flatListRef = useRef(null);
   const itemHeights = useRef({});
+  const currentOffset = useRef(0);
 
   useEffect(() => {
     console.log("Editor mounted with params:", params);
@@ -56,6 +60,14 @@ const Editor = () => {
       ms:
         Number(timearr[2]?.split(timearr[2].includes(".") ? "." : ",")[1]) || 0,
     };
+  }, []);
+
+  const addScrollIndex = useCallback(() => {
+    setScrollIndex((prev) => [currentOffset.current, ...prev]);
+  }, []);
+
+  const setCurrentOffset = useCallback((event) => {
+    currentOffset.current = event.nativeEvent.contentOffset.y;
   }, []);
 
   const TextToSub = useCallback(
@@ -253,10 +265,11 @@ const Editor = () => {
           subData={item}
           setSub={changeSub}
           Index={index}
+          addScrollIndex={addScrollIndex}
         />
       );
     },
-    [changeSub],
+    [changeSub, addScrollIndex, params.fileName],
   );
 
   const keyExtractor = useCallback((item) => item.id, []);
@@ -298,6 +311,13 @@ const Editor = () => {
     setMovieModalVisible(false);
   }, [videoId, videoSeason, videoEp]);
 
+  const scrollToIndex = () => {
+    if (scrollIndex.length === 0) return;
+    const point = scrollIndex[0];
+    flatListRef.current?.scrollToOffset({ offset: point, animated: true });
+    setScrollIndex((prev) => prev.slice(1));
+  };
+
   useEffect(() => {
     if (params.file) {
       loadSubtitleFile(params.file);
@@ -332,6 +352,7 @@ const Editor = () => {
       removeClippedSubviews: Platform.OS !== "web",
       // Layout optimization
       getItemLayout: getItemLayout,
+      onScroll: setCurrentOffset,
       // Scroll performance
       decelerationRate: Platform.OS === "ios" ? 0.998 : 0.99,
       scrollEventThrottle: 16,
@@ -500,6 +521,27 @@ const Editor = () => {
           </Button>
         </SafeAreaView>
       </Modal>
+      <View
+        style={{
+          position: "absolute",
+          bottom: 20,
+          right: 20,
+        }}
+      >
+        {scrollIndex.length > 0 && (
+          <Badge
+            style={{
+              position: "absolute",
+              top: -10,
+              right: -5,
+              zIndex: 1,
+            }}
+          >
+            {scrollIndex.length}
+          </Badge>
+        )}
+        <FAB onPress={() => scrollToIndex()} icon="arrow-up" />
+      </View>
     </View>
   );
 };

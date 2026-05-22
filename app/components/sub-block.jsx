@@ -10,75 +10,69 @@ import {
 } from "react-native";
 
 const SubBlock = memo(
-  ({
-    Index,
-    subData,
-    imageGpId,
-    setTime,
-    setSub,
-    videoName,
-    addScrollIndex,
-  }) => {
+  ({ Index, subData, imageGpId, setTime, setSub, videoName }) => {
+    const itemKey = useMemo(() => `${videoName}_${Index}`, [videoName, Index]);
     const [localSubtitle, setLocalSubtitle] = useState(subData.subtitle);
     const subDebounceTimer = useRef(null);
     const isMounted = useRef(true);
-    const [imgUri, setImgUri] = useState("");
+    const [imgUri, setImgUri] = useState(() => {
+      return imageCache.current[itemKey]?.uri || "";
+    });
     const [isImgLoading, setIsImgLoading] = useState(false);
-    const [imgError, setImgError] = useState(false);
+    const [imgError, setImgError] = useState(() => {
+      return imageCache.current[itemKey]?.error || false;
+    });
 
     // Format time for display
     const formatTimeDisplay = useCallback((time) => {
       return `${String(time.hour).padStart(2, "0")}:${String(time.min).padStart(2, "0")}:${String(time.sec).padStart(2, "0")},${String(time.ms).padStart(3, "0")}`;
     }, []);
 
-    useEffect(() => {
+    const getImg = () => {
+      setIsImgLoading(true);
+      setImgError(false);
       if (imgUri) {
-        console.log(`Image URI for subtitle ${Index}: ${imgUri}`);
-      }
-    }, [imgUri]);
-
-    const getImg = useCallback(() => {
-      if (!imageGpId) {
-        setImgError(true);
+        setIsImgLoading(false);
         return;
       }
 
-      setIsImgLoading(true);
-      setImgError(false);
-
+      if (!imageGpId) {
+        setIsImgLoading(false);
+        setImgError(true);
+        return;
+      }
       const startTime = `${String(subData.start.hour).padStart(1, "0")}_${String(subData.start.min).padStart(2, "0")}_${String(subData.start.sec).padStart(2, "0")}_${String(subData.start.ms).padStart(3, "0")}`;
       const endTime = `${String(subData.end.hour).padStart(1, "0")}_${String(subData.end.min).padStart(2, "0")}_${String(subData.end.sec).padStart(2, "0")}_${String(subData.end.ms).padStart(3, "0")}`;
       const partialName = `${startTime}__${endTime}`;
-      const uri = `https://vip.yotepyaclub.com/sub-editor/extracted/${videoName}/${partialName}_${imageGpId}.jpeg`;
-
-      setImgUri(uri);
-      addScrollIndex();
-    }, [imageGpId, subData.start, subData.end, videoName, addScrollIndex]);
+      setImgUri(
+        `https://vip.yotepyaclub.com/sub-editor/extracted/${videoName}/${partialName}_${imageGpId}.jpeg`,
+      );
+      return null;
+    };
 
     // Sync with props
     useEffect(() => {
       setLocalSubtitle(subData.subtitle);
     }, [subData.subtitle]);
 
-    // Load image when imageGpId changes
     useEffect(() => {
       if (imageGpId) {
         getImg();
-      } else {
-        // Reset image state when no imageGpId
-        setImgUri("");
-        setImgError(false);
-        setIsImgLoading(false);
       }
-    }, [imageGpId, getImg]);
+    }, [imageGpId]);
 
-    // Cleanup on unmount
     useEffect(() => {
       return () => {
         isMounted.current = false;
         if (subDebounceTimer.current) clearTimeout(subDebounceTimer.current);
       };
     }, []);
+
+    useEffect(() => {
+      if (imgUri) {
+        imageCache.current[itemKey] = { uri: imgUri, error: imgError };
+      }
+    }, [imgUri, imgError, imageGpId, itemKey]);
 
     const handleSubtitleChange = useCallback(
       (text) => {
@@ -112,7 +106,6 @@ const SubBlock = memo(
             </Text>
           </View>
         </View>
-
         <View
           style={{
             flex: 1,
@@ -152,7 +145,6 @@ const SubBlock = memo(
             </Text>
           )}
         </View>
-
         {/* Subtitle Text Input */}
         <View style={styles.subtitleContainer}>
           <TextInput
@@ -237,5 +229,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#e0e0e0",
   },
 });
+
+const imageCache = { current: {} };
 
 export default SubBlock;

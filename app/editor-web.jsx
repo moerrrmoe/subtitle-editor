@@ -17,11 +17,9 @@ import {
 import {
   ActivityIndicator,
   Appbar,
-  Badge,
   Button,
-  FAB,
   MD2Colors,
-  TextInput,
+  TextInput
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import MovieModal from "./components/movie-modal";
@@ -41,7 +39,7 @@ const Editor = () => {
   const [syncSecond, setSyncSecond] = useState(0);
   const [isWebviewVisible, setIsWebviewVisible] = useState(true);
   const [scrollIndex, setScrollIndex] = useState([]);
-  const [imageGpId, setImageGpId] = useState();
+  const [imageGpId, setImageGpId] = useState(undefined);
 
   const flatListRef = useRef(null);
   const itemHeights = useRef({});
@@ -61,14 +59,6 @@ const Editor = () => {
       ms:
         Number(timearr[2]?.split(timearr[2].includes(".") ? "." : ",")[1]) || 0,
     };
-  }, []);
-
-  const addScrollIndex = useCallback(() => {
-    setScrollIndex((prev) => [currentOffset.current, ...prev]);
-  }, []);
-
-  const setCurrentOffset = useCallback((event) => {
-    currentOffset.current = event.nativeEvent.contentOffset.y;
   }, []);
 
   const TextToSub = useCallback(
@@ -137,6 +127,7 @@ const Editor = () => {
           setImageGpId(data.image_id);
           console.log("Received image group ID:", data.image_id);
         } else {
+          setImageGpId(null);
           alert(
             "Failed to get image group ID for " +
               movieName +
@@ -292,19 +283,18 @@ const Editor = () => {
           subData={item}
           setSub={changeSub}
           Index={index}
-          addScrollIndex={addScrollIndex}
           imageGpId={imageGpId}
         />
       );
     },
-    [changeSub, addScrollIndex, params.fileName, imageGpId],
+    [changeSub, params.fileName, imageGpId],
   );
 
   const keyExtractor = useCallback((item) => item.id, []);
 
   // Optimized getItemLayout for better scrolling
   const getItemLayout = useCallback((data, index) => {
-    const height = itemHeights.current[index] || 140; // Default height
+    const height = itemHeights.current[index] || 260; // Default height
     return {
       length: height,
       offset: height * index,
@@ -339,13 +329,6 @@ const Editor = () => {
     setMovieModalVisible(false);
   }, [videoId, videoSeason, videoEp]);
 
-  const scrollToIndex = () => {
-    if (scrollIndex.length === 0) return;
-    const point = scrollIndex[0];
-    flatListRef.current?.scrollToOffset({ offset: point, animated: true });
-    setScrollIndex((prev) => prev.slice(1));
-  };
-
   useEffect(() => {
     if (params.file) {
       loadSubtitleFile(params.file);
@@ -377,11 +360,9 @@ const Editor = () => {
       // Performance optimizations
       initialNumToRender: 50,
       maxToRenderPerBatch: 50,
-      windowSize: 21,
-      removeClippedSubviews: false,
+      removeClippedSubviews: Platform.OS !== "web", // Better performance on Android
       // Layout optimization
       getItemLayout: getItemLayout,
-      onScroll: setCurrentOffset,
       // Scroll performance
       decelerationRate: Platform.OS === "ios" ? 0.998 : 0.99,
       scrollEventThrottle: 16,
@@ -492,7 +473,7 @@ const Editor = () => {
         </Button>
       </View>
 
-      <FlatList {...flatListProps} />
+      {imageGpId !== undefined && <FlatList {...flatListProps} />}
 
       <Modal
         visible={movieModalVisible}
@@ -550,27 +531,6 @@ const Editor = () => {
           </Button>
         </SafeAreaView>
       </Modal>
-      <View
-        style={{
-          position: "absolute",
-          bottom: 20,
-          right: 20,
-        }}
-      >
-        {scrollIndex.length > 0 && (
-          <Badge
-            style={{
-              position: "absolute",
-              top: -10,
-              right: -5,
-              zIndex: 1,
-            }}
-          >
-            {scrollIndex.length}
-          </Badge>
-        )}
-        <FAB onPress={() => scrollToIndex()} icon="arrow-up" />
-      </View>
     </View>
   );
 };

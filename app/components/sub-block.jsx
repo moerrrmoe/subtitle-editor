@@ -1,7 +1,6 @@
 import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Button,
   Image,
   Platform,
   StyleSheet,
@@ -11,58 +10,75 @@ import {
 } from "react-native";
 
 const SubBlock = memo(
-  ({ Index, subData, setTime, setSub, videoName, addScrollIndex }) => {
-    const itemKey = useMemo(() => `${videoName}_${Index}`, [videoName, Index]);
+  ({
+    Index,
+    subData,
+    imageGpId,
+    setTime,
+    setSub,
+    videoName,
+    addScrollIndex,
+  }) => {
     const [localSubtitle, setLocalSubtitle] = useState(subData.subtitle);
     const subDebounceTimer = useRef(null);
     const isMounted = useRef(true);
-    const [imgUri, setImgUri] = useState(() => {
-      return imageCache.current[itemKey]?.uri || "";
-    });
+    const [imgUri, setImgUri] = useState("");
     const [isImgLoading, setIsImgLoading] = useState(false);
-    const [imgError, setImgError] = useState(() => {
-      return imageCache.current[itemKey]?.error || false;
-    });
+    const [imgError, setImgError] = useState(false);
 
     // Format time for display
     const formatTimeDisplay = useCallback((time) => {
       return `${String(time.hour).padStart(2, "0")}:${String(time.min).padStart(2, "0")}:${String(time.sec).padStart(2, "0")},${String(time.ms).padStart(3, "0")}`;
     }, []);
 
-    const getImg = () => {
-      setIsImgLoading(true);
-      setImgError(false);
+    useEffect(() => {
       if (imgUri) {
-        setIsImgLoading(false);
+        console.log(`Image URI for subtitle ${Index}: ${imgUri}`);
+      }
+    }, [imgUri]);
+
+    const getImg = useCallback(() => {
+      if (!imageGpId) {
+        setImgError(true);
         return;
       }
+
+      setIsImgLoading(true);
+      setImgError(false);
+
       const startTime = `${String(subData.start.hour).padStart(1, "0")}_${String(subData.start.min).padStart(2, "0")}_${String(subData.start.sec).padStart(2, "0")}_${String(subData.start.ms).padStart(3, "0")}`;
       const endTime = `${String(subData.end.hour).padStart(1, "0")}_${String(subData.end.min).padStart(2, "0")}_${String(subData.end.sec).padStart(2, "0")}_${String(subData.end.ms).padStart(3, "0")}`;
       const partialName = `${startTime}__${endTime}`;
-      setImgUri(
-        `https://vip.yotepyaclub.com/sub-editor/proxy-image.php?partialName=${partialName}&videoName=${encodeURIComponent(videoName)}`,
-      );
+      const uri = `https://vip.yotepyaclub.com/sub-editor/extracted/${videoName}/${partialName}_${imageGpId}.jpeg`;
+
+      setImgUri(uri);
       addScrollIndex();
-      return null;
-    };
+    }, [imageGpId, subData.start, subData.end, videoName, addScrollIndex]);
 
     // Sync with props
     useEffect(() => {
       setLocalSubtitle(subData.subtitle);
     }, [subData.subtitle]);
 
+    // Load image when imageGpId changes
+    useEffect(() => {
+      if (imageGpId) {
+        getImg();
+      } else {
+        // Reset image state when no imageGpId
+        setImgUri("");
+        setImgError(false);
+        setIsImgLoading(false);
+      }
+    }, [imageGpId, getImg]);
+
+    // Cleanup on unmount
     useEffect(() => {
       return () => {
         isMounted.current = false;
         if (subDebounceTimer.current) clearTimeout(subDebounceTimer.current);
       };
     }, []);
-
-    useEffect(() => {
-      if (imgUri) {
-        imageCache.current[itemKey] = { uri: imgUri, error: imgError };
-      }
-    }, [imgUri, imgError, itemKey]);
 
     const handleSubtitleChange = useCallback(
       (text) => {
@@ -97,18 +113,6 @@ const SubBlock = memo(
           </View>
         </View>
 
-        <View>
-          <Button
-            style={{
-              borderRadius: 6,
-              borderWidth: 1,
-              borderColor: "#e0e0e0",
-            }}
-            title="img"
-            color="#644DA1"
-            onPress={() => getImg()}
-          />
-        </View>
         <View
           style={{
             flex: 1,
@@ -148,6 +152,7 @@ const SubBlock = memo(
             </Text>
           )}
         </View>
+
         {/* Subtitle Text Input */}
         <View style={styles.subtitleContainer}>
           <TextInput
@@ -232,7 +237,5 @@ const styles = StyleSheet.create({
     backgroundColor: "#e0e0e0",
   },
 });
-
-const imageCache = { current: {} };
 
 export default SubBlock;

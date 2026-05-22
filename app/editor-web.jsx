@@ -41,6 +41,7 @@ const Editor = () => {
   const [syncSecond, setSyncSecond] = useState(0);
   const [isWebviewVisible, setIsWebviewVisible] = useState(true);
   const [scrollIndex, setScrollIndex] = useState([]);
+  const [imageGpId, setImageGpId] = useState();
 
   const flatListRef = useRef(null);
   const itemHeights = useRef({});
@@ -118,6 +119,32 @@ const Editor = () => {
   useEffect(() => {
     console.log("video url updated:", videoUrls);
   }, [videoUrls]);
+
+  useEffect(() => {
+    if (params.fileName) {
+      getImageGpId(params.fileName.replace(".vtt", ""));
+    }
+  }, [params.fileName]);
+
+  const getImageGpId = useCallback((movieName) => {
+    fetch(
+      "https://vip.yotepyaclub.com/sub-editor/get_image_id.php?movie_name=" +
+        encodeURIComponent(movieName),
+    )
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.ok == 1) {
+          setImageGpId(data.image_id);
+          console.log("Received image group ID:", data.image_id);
+        } else {
+          alert(
+            "Failed to get image group ID for " +
+              movieName +
+              "\nPlease connect to vpn and try again",
+          );
+        }
+      });
+  }, []);
 
   const saveAsVtt = () => {
     const vttText = ArrToSub(subArr);
@@ -266,10 +293,11 @@ const Editor = () => {
           setSub={changeSub}
           Index={index}
           addScrollIndex={addScrollIndex}
+          imageGpId={imageGpId}
         />
       );
     },
-    [changeSub, addScrollIndex, params.fileName],
+    [changeSub, addScrollIndex, params.fileName, imageGpId],
   );
 
   const keyExtractor = useCallback((item) => item.id, []);
@@ -349,7 +377,8 @@ const Editor = () => {
       // Performance optimizations
       initialNumToRender: 50,
       maxToRenderPerBatch: 50,
-      removeClippedSubviews: Platform.OS !== "web",
+      windowSize: 21,
+      removeClippedSubviews: false,
       // Layout optimization
       getItemLayout: getItemLayout,
       onScroll: setCurrentOffset,
